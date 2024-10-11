@@ -532,7 +532,7 @@ local function add_highlight(options, buf, ns, data)
       local chunks = {}
       for _, hl in ipairs(hls) do
         table.insert(chunks, 1, { options.virtualtext, hl.name })
-        nvim_buf_set_extmark(buf, ns, linenr, hl.range[1] - 1, {
+        nvim_buf_set_extmark(0, ns, linenr, hl.range[1] - 1, {
           virt_text = { { "󱓻 ", hl.name } }, -- Use the sanitized highlight group
           virt_text_pos = "inline", -- Place the square right before the hex code
           hl_mode = "combine", -- Combine with existing text
