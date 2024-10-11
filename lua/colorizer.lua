@@ -9,7 +9,6 @@ local nvim_buf_add_highlight = vim.api.nvim_buf_add_highlight
 local nvim_buf_clear_namespace = vim.api.nvim_buf_clear_namespace
 local nvim_buf_get_lines = vim.api.nvim_buf_get_lines
 local nvim_get_current_buf = vim.api.nvim_get_current_buf
-local nvim_buf_set_extmark = vim.api.nvim_buf_set_extmark
 local band, lshift, bor, tohex = bit.band, bit.lshift, bit.bor, bit.tohex
 local rshift = bit.rshift
 local floor, min, max = math.floor, math.min, math.max
@@ -17,24 +16,20 @@ local floor, min, max = math.floor, math.min, math.max
 local COLOR_MAP
 local COLOR_TRIE
 local COLOR_NAME_MINLEN, COLOR_NAME_MAXLEN
-local COLOR_NAME_SETTINGS = {
-  lowercase = false,
-  strip_digits = false,
-}
 
 --- Setup the COLOR_MAP and COLOR_TRIE
-local function initialize_trie()
+local function initialize_trie(options)
   if not COLOR_TRIE then
     COLOR_MAP = {}
     COLOR_TRIE = Trie()
     for k, v in pairs(nvim.get_color_map()) do
-      if not (COLOR_NAME_SETTINGS.strip_digits and k:match("%d+$")) then
+      if not (options.strip_digits and k:match("%d+$")) then
         COLOR_NAME_MINLEN = COLOR_NAME_MINLEN and min(#k, COLOR_NAME_MINLEN) or #k
         COLOR_NAME_MAXLEN = COLOR_NAME_MAXLEN and max(#k, COLOR_NAME_MAXLEN) or #k
         local rgb_hex = tohex(v, 6)
         COLOR_MAP[k] = rgb_hex
         COLOR_TRIE:insert(k)
-        if COLOR_NAME_SETTINGS.lowercase then
+        if options.lowercase then
           local lowercase = k:lower()
           COLOR_MAP[lowercase] = rgb_hex
           COLOR_TRIE:insert(lowercase)
@@ -64,10 +59,11 @@ local DEFAULT_OPTIONS = {
   hsl_fn = false, -- CSS hsl() and hsla() functions
   css = false, -- Enable all CSS features: rgb_fn, hsl_fn, names, RGB, RRGGBB
   css_fn = false, -- Enable all CSS *functions*: rgb_fn, hsl_fn
-  -- Available modes: foreground, background, sign, virtualtext
-  lowercase = true,
+  -- Available modes: foreground, background
   mode = "background", -- Set the display mode.
-  virtualtext = "■",
+  -- Color name options
+  lowercase = false, -- Match lowercase "name" codes like blue
+  strip_digits = false,
 }
 
 -- -- TODO use rgb as the return value from the matcher functions
@@ -522,26 +518,6 @@ local function make_matcher(options)
   return loop_parse_fn
 end
 
-local function add_highlight(options, buf, ns, data)
-  for linenr, hls in pairs(data) do
-    if vim.tbl_contains({ "foreground", "background" }, options.mode) then
-      for _, hl in ipairs(hls) do
-        nvim_buf_add_highlight(buf, ns, hl.name, linenr, hl.range[1], hl.range[2])
-      end
-    elseif options.mode == "virtualtext" then
-      local chunks = {}
-      for _, hl in ipairs(hls) do
-        table.insert(chunks, 1, { options.virtualtext, hl.name })
-        nvim_buf_set_extmark(buf, ns, linenr, hl.range[1] - 1, {
-          virt_text = { { "󱓻 ", hl.name } }, -- Use the sanitized highlight group
-          virt_text_pos = "inline", -- Place the square right before the hex code
-          hl_mode = "combine", -- Combine with existing text
-        })
-      end
-    end
-  end
-end
-
 --[[-- Highlight the buffer region.
 Highlight starting from `line_start` (0-indexed) for each line described by `lines` in the
 buffer `buf` and attach it to the namespace `ns`.
@@ -558,8 +534,6 @@ local function highlight_buffer(buf, ns, lines, line_start, options)
   initialize_trie()
   ns = ns or DEFAULT_NAMESPACE
   local loop_parse_fn = make_matcher(options)
-  local data = {}
-  local mode = options.mode == "background" and { mode = "background" } or { mode = "foreground" }
   for current_linenum, line in ipairs(lines) do
     current_linenum = current_linenum - 1 + line_start
     -- Upvalues are options and current_linenum
@@ -567,17 +541,14 @@ local function highlight_buffer(buf, ns, lines, line_start, options)
     while i < #line do
       local length, rgb_hex = loop_parse_fn(line, i)
       if length then
-        local name = create_highlight(rgb_hex, mode)
-        local d = data[current_linenum] or {}
-        table.insert(d, { name = name, range = { i - 1, i + length - 1 } })
-        data[current_linenum] = d
+        local highlight_name = create_highlight(rgb_hex, options)
+        nvim_buf_add_highlight(buf, ns, highlight_name, current_linenum, i - 1, i + length - 1)
         i = i + length
       else
         i = i + 1
       end
     end
   end
-  add_highlight(options, buf, ns, data)
 end
 
 ---
@@ -692,8 +663,7 @@ local function setup(filetypes, user_default_options)
     exclusions = {},
     default_options = merge(DEFAULT_OPTIONS, user_default_options or {}),
   }
-  -- Initialize this AFTER setting COLOR_NAME_SETTINGS
-  initialize_trie()
+  initialize_trie(SETUP_SETTINGS.default_options)
   function COLORIZER_SETUP_HOOK()
     local filetype = nvim.bo.filetype
     if SETUP_SETTINGS.exclusions[filetype] then
