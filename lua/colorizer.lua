@@ -9,7 +9,7 @@ local nvim_buf_add_highlight = vim.api.nvim_buf_add_highlight
 local nvim_buf_clear_namespace = vim.api.nvim_buf_clear_namespace
 local nvim_buf_get_lines = vim.api.nvim_buf_get_lines
 local nvim_get_current_buf = vim.api.nvim_get_current_buf
-local nvim_buf_set_virtual_text = vim.api.nvim_buf_set_virtual_text
+local nvim_buf_set_extmark = vim.api.nvim_buf_set_extmark
 local band, lshift, bor, tohex = bit.band, bit.lshift, bit.bor, bit.tohex
 local rshift = bit.rshift
 local floor, min, max = math.floor, math.min, math.max
@@ -65,6 +65,7 @@ local DEFAULT_OPTIONS = {
   css = false, -- Enable all CSS features: rgb_fn, hsl_fn, names, RGB, RRGGBB
   css_fn = false, -- Enable all CSS *functions*: rgb_fn, hsl_fn
   -- Available modes: foreground, background, sign, virtualtext
+  lowercase = true,
   mode = "background", -- Set the display mode.
   virtualtext = "■",
 }
@@ -531,8 +532,12 @@ local function add_highlight(options, buf, ns, data)
       local chunks = {}
       for _, hl in ipairs(hls) do
         table.insert(chunks, 1, { options.virtualtext, hl.name })
+        nvim_buf_set_extmark(buf, ns, linenr, hl.range[1] - 1, {
+          virt_text = { { "󱓻 ", hl.name } }, -- Use the sanitized highlight group
+          virt_text_pos = "inline", -- Place the square right before the hex code
+          hl_mode = "combine", -- Combine with existing text
+        })
       end
-      nvim_buf_set_virtual_text(buf, ns, linenr, chunks, {})
     end
   end
 end
