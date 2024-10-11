@@ -522,27 +522,19 @@ local function make_matcher(options)
 end
 
 local function add_highlight(options, buf, ns, data)
-	for linenr, hls in pairs(data) do
-		if vim.tbl_contains({'foreground', 'background'}, options.mode) then
-			for _, hl in ipairs(hls) do
-				if hl.name then
-					-- Add normal highlight as before
-					nvim_buf_add_highlight(buf, ns, hl.name, linenr, hl.range[1], hl.range[2])
-				end
-			end
-		elseif options.mode == 'virtualtext' then
-			for _, hl in ipairs(hls) do
-				-- Ensure hl.name is valid and hl.range[1] is defined
-				if hl.name and hl.range[1] then
-					local chunks = {
-						{options.virtualtext, hl.name}  -- Create a virtual text chunk
-					}
-					-- Set the virtual text at the start of the hex color code (hl.range[1])
-					nvim_buf_set_virtual_text(buf, ns, linenr, hl.range[1], chunks, {})
-				end
-			end
-		end
-	end
+  for linenr, hls in pairs(data) do
+    if vim.tbl_contains({ "foreground", "background" }, options.mode) then
+      for _, hl in ipairs(hls) do
+        nvim_buf_add_highlight(buf, ns, hl.name, linenr, hl.range[1], hl.range[2])
+      end
+    elseif options.mode == "virtualtext" then
+      local chunks = {}
+      for _, hl in ipairs(hls) do
+        table.insert(chunks, 1, { options.virtualtext, hl.name })
+      end
+      nvim_buf_set_virtual_text(buf, ns, linenr, chunks, {})
+    end
+  end
 end
 
 --[[-- Highlight the buffer region.
