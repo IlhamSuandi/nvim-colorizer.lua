@@ -185,21 +185,35 @@ local function hsl_to_rgb(h, s, l)
 end
 
 local function color_name_parser(line, i)
-  if i > 1 and byte_is_alphanumeric(line:byte(i - 1)) then
-    return
-  end
+  -- Ensure the line has enough characters to contain a valid color name
   if #line < i + COLOR_NAME_MINLEN - 1 then
     return
   end
+
+  -- Get the longest prefix that matches a color name
   local prefix = COLOR_TRIE:longest_prefix(line, i)
   if prefix then
-    -- Check if there is a letter here so as to disallow matching here.
-    -- Take the Blue out of Blueberry
-    -- Line end or non-letter.
     local next_byte_index = i + #prefix
-    if #line >= next_byte_index and byte_is_alphanumeric(line:byte(next_byte_index)) then
+
+    -- Check if the character before the prefix is a space
+    if i > 1 and line:sub(i - 1, i - 1) ~= " " then
       return
     end
+
+    -- Check if the character after the color name is not alphanumeric or underscore
+    if
+      next_byte_index <= #line
+      and (byte_is_alphanumeric(line:byte(next_byte_index)) or line:byte(next_byte_index) == string.byte("_"))
+    then
+      return
+    end
+
+    -- If the character after is the end of the line, also consider it valid
+    if next_byte_index > #line then
+      return #prefix, COLOR_MAP[prefix]
+    end
+
+    -- Return the length of the prefix and the associated color from the map
     return #prefix, COLOR_MAP[prefix]
   end
 end
